@@ -65,24 +65,33 @@ export const DEFAULT_PLACES: Record<string, [number, number, number]> = {
 
 // ───────────────────────── cell mask / packing ─────────────────────────
 interface MaskFile { w: number; h: number; step: number; rows: string[]; frame: any; cells: { slot: number; cx: number; cy: number }[]; }
-const MASK: MaskFile = JSON.parse(fs.readFileSync(A('cell_mask.json'), 'utf8'));
-const FW = MASK.frame.w, FH = MASK.frame.h;
-const PX = FW / MASK.frame.imgW, PY = FH / MASK.frame.imgH; // frame px → pt
-const slotAt: Uint8Array[] = MASK.rows.map(r => Uint8Array.from(r, c => parseInt(c, 16)));
-// integral images (one per slot) for O(1) "is this rectangle fully inside the cell" tests
-const INTEG: Float64Array[] = [];
-for (let s = 1; s <= 12; s++) {
-  const W = MASK.w + 1, I = new Float64Array(W * (MASK.h + 1));
-  for (let y = 0; y < MASK.h; y++) for (let x = 0; x < MASK.w; x++)
-    I[(y + 1) * W + x + 1] = (slotAt[y][x] === s ? 1 : 0) + I[y * W + x + 1] + I[(y + 1) * W + x] - I[y * W + x];
-  INTEG[s] = I;
+type MaskData = { mask: MaskFile; FW: number; FH: number; PX: number; PY: number; INTEG: Float64Array[] };
+let _maskData: MaskData | null = null;
+function getMaskData(): MaskData {
+  if (_maskData) return _maskData;
+  const mask: MaskFile = JSON.parse(fs.readFileSync(A('cell_mask.json'), 'utf8'));
+  const FW = mask.frame.w, FH = mask.frame.h;
+  const PX = FW / mask.frame.imgW, PY = FH / mask.frame.imgH; // frame px → pt
+  const slotAt: Uint8Array[] = mask.rows.map(r => Uint8Array.from(r, c => parseInt(c, 16)));
+  // integral images (one per slot) for O(1) "is this rectangle fully inside the cell" tests
+  const INTEG: Float64Array[] = [];
+  for (let s = 1; s <= 12; s++) {
+    const W = mask.w + 1, I = new Float64Array(W * (mask.h + 1));
+    for (let y = 0; y < mask.h; y++) for (let x = 0; x < mask.w; x++)
+      I[(y + 1) * W + x + 1] = (slotAt[y][x] === s ? 1 : 0) + I[y * W + x + 1] + I[(y + 1) * W + x] - I[y * W + x];
+    INTEG[s] = I;
+  }
+  _maskData = { mask, FW, FH, PX, PY, INTEG };
+  return _maskData;
 }
+
 type Rect = { x0: number; y0: number; x1: number; y1: number }; // frame-local pt (origin = frame top-left)
 function inside(slot: number, r: Rect): boolean {
-  const k = 1 / (MASK.step * PX), ky = 1 / (MASK.step * PY);
+  const { mask, PX, PY, INTEG } = getMaskData();
+  const k = 1 / (mask.step * PX), ky = 1 / (mask.step * PY);
   const x0 = Math.floor(r.x0 * k), x1 = Math.ceil(r.x1 * k), y0 = Math.floor(r.y0 * ky), y1 = Math.ceil(r.y1 * ky);
-  if (x0 < 0 || y0 < 0 || x1 > MASK.w || y1 > MASK.h) return false;
-  const W = MASK.w + 1, I = INTEG[slot];
+  if (x0 < 0 || y0 < 0 || x1 > mask.w || y1 > mask.h) return false;
+  const W = mask.w + 1, I = INTEG[slot];
   const sum = I[y1 * W + x1] - I[y0 * W + x1] - I[y1 * W + x0] + I[y0 * W + x0];
   return sum === (x1 - x0) * (y1 - y0);
 }
@@ -91,7 +100,8 @@ const overlap = (a: Rect, b: Rect, gap = 1.5) => a.x0 < b.x1 + gap && a.x1 > b.x
 interface Item { w: number; h: number; draw: (page: PDFPage, cx: number, top: number) => void; } // draw(centre x, top) in page pt
 /** Pack items into one house cell. Tries bigger scales first; returns centres (frame-local pt). */
 function packCell(slot: number, build: (scale: number) => Item[], obstacle: (scale: number) => Rect | null) {
-  const cell = MASK.cells.find(c => c.slot === slot)!;
+  const { mask, FW, FH, PX, PY } = getMaskData();
+  const cell = mask.cells.find(c => c.slot === slot)!;
   const target = { x: cell.cx * PX, y: cell.cy * PY };
   const tgt = (() => { const o = obstacle(1); return o ? { x: target.x, y: target.y + (slot % 3 === 1 ? 24 : 6) } : target; })();
   for (const scale of [1, 0.92, 0.84, 0.76, 0.68, 0.6, 0.52, 0.45]) {
@@ -142,7 +152,8 @@ function drawTable(page: PDFPage, f: Fonts, xs: [number, number, number], rows: 
 // ───────────────────────── chart ─────────────────────────
 type Placement = { sign: number; name: string; retro: boolean; deg?: number };
 function drawChart(page: PDFPage, f: Fonts, which: 'natal' | 'gochar', asc: number, bodies: Placement[]) {
-  const [fx, fy] = MASK.frame[which] as [number, number];
+  const { mask, PX, PY } = getMaskData();
+  const [fx, fy] = mask.frame[which] as [number, number];
   const slotOfSign = (sign: number) => ((sign - asc + 12) % 12) + 1;
   for (let slot = 1; slot <= 12; slot++) {
     const sign = ((asc - 1 + slot - 1) % 12) + 1;
@@ -243,12 +254,13 @@ export async function generateKundliPdf(input: GenerateKundliPdfInput): Promise<
     hdr.forEach((h, i) => { text(page, h.s, h.font, h.size, hx, h.base, h.color); hx += textW(h.font, h.s, h.size) + (gaps[i] ?? 0) * k; });
 
     // titles
-    const [nfx] = MASK.frame.natal, [gfx] = MASK.frame.gochar;
+    const { mask, FW, FH } = getMaskData();
+    const [nfx] = mask.frame.natal, [gfx] = mask.frame.gochar;
     centered(page, 'Janma Lagna Kundli', f.baloo, 42, nfx + FW / 2 - 3.4, 155.29, MAROON);
     centered(page, 'Aaj Ka Graha Gochar', f.baloo, 42, gfx + FW / 2 - 3.4, 155.29, MAROON);
 
     // chart frames
-    const [fnx, fny] = MASK.frame.natal as [number, number], [fgx, fgy] = MASK.frame.gochar as [number, number];
+    const [fnx, fny] = mask.frame.natal as [number, number], [fgx, fgy] = mask.frame.gochar as [number, number];
     page.drawImage(await doc.embedPng(fs.readFileSync(A('frame_natal.png'))), { x: fnx, y: Y(fny + FH), width: FW, height: FH });
     page.drawImage(await doc.embedPng(fs.readFileSync(A('frame_gochar.png'))), { x: fgx, y: Y(fgy + FH), width: FW, height: FH });
 

@@ -1,5 +1,3 @@
-import { defaultPdfFilename, generateKundliPdf } from '../src/generatePdf';
-
 type Req = {
   method?: string;
   body?: any;
@@ -36,6 +34,7 @@ export default async function handler(req: Req, res: Res) {
   }
 
   try {
+    const { defaultPdfFilename, generateKundliPdf } = await import('../src/generatePdf.js');
     const body = await readBody(req);
     const pdf = await generateKundliPdf({
       name: String(body.name || 'Kundli'),
@@ -55,7 +54,8 @@ export default async function handler(req: Req, res: Res) {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(Buffer.from(pdf));
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to generate PDF';
-    res.status(400).json({ error: message });
+    const message = err instanceof Error ? (err.stack || err.message) : String(err);
+    console.error('generate-kundli error:', message);
+    res.status(500).json({ error: message });
   }
 }
