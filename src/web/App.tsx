@@ -12,6 +12,14 @@ type FormState = {
   gochar: string;
 };
 
+type GeoResult = {
+  displayName: string;
+  latitude: number;
+  longitude: number;
+  timezone: number;
+  tzname: string;
+};
+
 const PLACES: Record<string, { latitude: number; longitude: number; timezone: number }> = {
   mumbai: { latitude: 19.076, longitude: 72.8777, timezone: 5.5 },
 };
@@ -38,6 +46,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastFile, setLastFile] = useState<string | null>(null);
+  const [geoQuery, setGeoQuery] = useState('');
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [geoResults, setGeoResults] = useState<GeoResult[]>([]);
 
   const canSubmit = useMemo(() => {
     return Boolean(form.name && form.date && form.time && form.place && form.latitude && form.longitude && form.timezone);
@@ -59,6 +71,44 @@ export default function App() {
         timezone: String(preset.timezone),
       }));
     }
+  }
+
+  async function searchLocation() {
+    const q = geoQuery.trim();
+    if (!q) {
+      setGeoError('Enter a location to search.');
+      setGeoResults([]);
+      return;
+    }
+    setGeoLoading(true);
+    setGeoError(null);
+    setGeoResults([]);
+    try {
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to find location');
+      const results = Array.isArray(data.results) ? data.results as GeoResult[] : [];
+      setGeoResults(results);
+      if (results.length === 0) setGeoError('No locations found. Try a more specific name.');
+    } catch (err) {
+      setGeoError(err instanceof Error ? err.message : 'Failed to find location');
+    } finally {
+      setGeoLoading(false);
+    }
+  }
+
+  function applyLocation(result: GeoResult) {
+    const shortName = result.displayName.split(',')[0]?.trim() || result.displayName;
+    setForm((prev) => ({
+      ...prev,
+      place: shortName,
+      latitude: String(result.latitude),
+      longitude: String(result.longitude),
+      timezone: String(result.timezone),
+      tzname: result.tzname || prev.tzname,
+    }));
+    setGeoResults([]);
+    setGeoError(null);
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -132,6 +182,40 @@ export default function App() {
                 <span>Birth place</span>
                 <input value={form.place} onChange={(e) => onPlaceChange(e.target.value)} required />
               </label>
+
+              <div className="field field-wide">
+                <span>Find location by name <small>(auto-fills coordinates & timezone)</small></span>
+                <div className="geo-row">
+                  <input
+                    value={geoQuery}
+                    onChange={(e) => setGeoQuery(e.target.value)}
+                    placeholder="e.g. New Delhi, India"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void searchLocation(); } }}
+                  />
+                  <button type="button" className="btn-secondary" onClick={() => void searchLocation()} disabled={geoLoading}>
+                    {geoLoading ? 'Searching…' : 'Find coordinates'}
+                  </button>
+                </div>
+                {geoError && <div className="geo-msg geo-msg-error">{geoError}</div>}
+                {geoResults.length > 0 && (
+                  <div className="geo-results" role="listbox" aria-label="Location results">
+                    {geoResults.map((r, i) => (
+                      <button
+                        type="button"
+                        key={`${r.latitude}-${r.longitude}-${i}`}
+                        className="geo-result"
+                        onClick={() => applyLocation(r)}
+                      >
+                        <span className="geo-result-name">{r.displayName}</span>
+                        <span className="geo-result-meta">
+                          {r.latitude.toFixed(4)}, {r.longitude.toFixed(4)} · UTC{r.timezone >= 0 ? '+' : ''}{r.timezone} · {r.tzname}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <label className="field">
                 <span>Birth date</span>
                 <input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required />
@@ -166,7 +250,7 @@ export default function App() {
               <button type="submit" disabled={!canSubmit || loading}>
                 {loading ? 'Generating PDF…' : 'Generate & Download PDF'}
               </button>
-              <p className="hint">Defaults match the sample: Vinay, 2004-02-28 09:16, Mumbai.</p>
+              <p className="hint">Search a location by name, or enter coordinates manually.</p>
             </div>
 
             {error && <div className="status status-error" role="alert">{error}</div>}

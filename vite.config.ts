@@ -40,6 +40,58 @@ function kundliApiPlugin(): Plugin {
           res.end(JSON.stringify({ error: message }));
         }
       });
+
+      server.middlewares.use('/api/geocode', async (req, res) => {
+        if (req.method !== 'GET') {
+          res.statusCode = 405;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          return;
+        }
+
+        try {
+          const url = new URL(req.url || '/', 'http://localhost');
+          const q = (url.searchParams.get('q') || '').trim();
+          if (!q) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Missing q parameter' }));
+            return;
+          }
+
+          const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`;
+          const geoRes = await fetch(nominatimUrl, {
+            headers: { 'User-Agent': 'kundli-pdf-app/1.0 (contact: local-app)', 'Accept': 'application/json' },
+          });
+          if (!geoRes.ok) throw new Error('Geocoding service failed');
+          const geoData = await geoRes.json() as Array<{ lat: string; lon: string; display_name: string }>;
+          const results = await Promise.all(geoData.slice(0, 5).map(async (item) => {
+            const latitude = Number(item.lat);
+            const longitude = Number(item.lon);
+            let timezone = 0;
+            let tzname = 'UTC';
+            try {
+              const tzUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=weather_code&timezone=auto`;
+              const tzRes = await fetch(tzUrl);
+              if (tzRes.ok) {
+                const tzData = await tzRes.json() as { utc_offset_seconds?: number; timezone?: string };
+                if (typeof tzData.utc_offset_seconds === 'number') timezone = tzData.utc_offset_seconds / 3600;
+                if (typeof tzData.timezone === 'string') tzname = tzData.timezone;
+              }
+            } catch { /* keep defaults */ }
+            return { displayName: item.display_name, latitude, longitude, timezone, tzname };
+          }));
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ results }));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Geocoding failed';
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: message }));
+        }
+      });
     },
   };
 }

@@ -6,7 +6,17 @@ import { fileURLToPath } from 'node:url';
 import { generateKundli, type KundliData, type PlanetInfo } from './kundli';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const A = (f: string) => path.join(HERE, '..', 'assets', f);
+const ASSET_ROOTS = [
+  path.join(process.cwd(), 'assets'),
+  path.join(HERE, '..', 'assets'),
+];
+const A = (f: string) => {
+  for (const root of ASSET_ROOTS) {
+    const p = path.join(root, f);
+    if (fs.existsSync(p)) return p;
+  }
+  return path.join(ASSET_ROOTS[0], f);
+};
 
 // ───────────────────────── page + design constants (measured from sample_kundli.pdf) ─────────────────────────
 const PAGE_W = 1190.25, PAGE_H = 842.25;
