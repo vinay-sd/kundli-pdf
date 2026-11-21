@@ -3,7 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateKundli, type KundliData, type PlanetInfo } from './kundli';
+import { generateKundli, type KundliData, type PlanetInfo } from './kundli.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ASSET_ROOTS = [

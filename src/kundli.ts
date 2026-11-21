@@ -1,10 +1,10 @@
 import { getKundli, Observer, rashiNames, nakshatraNames, getAyanamsa } from '@ishubhamx/panchangam-js';
 import * as Astronomy from 'astronomy-engine';
-import { GENERIC_INSIGHTS } from './insights/generic';
-import { getRashiByName, getRashiBySanskritName } from './insights/rashis';
-import { getGrahaByName, getGrahaBySanskritName } from './insights/grahas';
-import { getHouseByNumber } from './insights/houses';
-import { getNakshatraByName } from './insights/nakshatras';
+import { GENERIC_INSIGHTS } from './insights/generic.js';
+import { getRashiByName, getRashiBySanskritName } from './insights/rashis.js';
+import { getGrahaByName, getGrahaBySanskritName } from './insights/grahas.js';
+import { getHouseByNumber } from './insights/houses.js';
+import { getNakshatraByName } from './insights/nakshatras.js';
 
 export const ZODIAC = [
   'Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio',

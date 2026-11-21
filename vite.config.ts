@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { generateKundliPdf, defaultPdfFilename } from './src/generatePdf';
+import { generateKundliPdf, defaultPdfFilename } from './src/generatePdf.js';
 
 function kundliApiPlugin(): Plugin {
   return {

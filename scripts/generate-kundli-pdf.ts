@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_PLACES, defaultPdfFilename, generateKundliPdf } from '../src/generatePdf';
+import { DEFAULT_PLACES, defaultPdfFilename, generateKundliPdf } from '../src/generatePdf.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
