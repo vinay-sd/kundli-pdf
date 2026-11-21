@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { generateKundliPdf, getKundliAssets } from '../generatePdf.js';
 
 type FormState = {
   name: string;
@@ -39,6 +40,32 @@ const INITIAL: FormState = {
 function sanitizeFilename(name: string) {
   const safe = name.replace(/\W+/g, '_').replace(/^_+|_+$/g, '');
   return `kundli_${safe || 'chart'}.pdf`;
+}
+
+async function geocodeLocation(q: string): Promise<GeoResult[]> {
+  const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`;
+  const geoRes = await fetch(nominatimUrl, { headers: { Accept: 'application/json' } });
+  if (!geoRes.ok) throw new Error('Geocoding service failed');
+  const geoData = await geoRes.json() as Array<{ lat: string; lon: string; display_name: string }>;
+
+  return Promise.all(geoData.slice(0, 5).map(async (item) => {
+    const latitude = Number(item.lat);
+    const longitude = Number(item.lon);
+    let timezone = 0;
+    let tzname = 'UTC';
+    try {
+      const tzUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=weather_code&timezone=auto`;
+      const tzRes = await fetch(tzUrl);
+      if (tzRes.ok) {
+        const tzData = await tzRes.json() as { utc_offset_seconds?: number; timezone?: string };
+        if (typeof tzData.utc_offset_seconds === 'number') timezone = tzData.utc_offset_seconds / 3600;
+        if (typeof tzData.timezone === 'string') tzname = tzData.timezone;
+      }
+    } catch {
+      // keep defaults
+    }
+    return { displayName: item.display_name, latitude, longitude, timezone, tzname };
+  }));
 }
 
 export default function App() {
@@ -84,10 +111,7 @@ export default function App() {
     setGeoError(null);
     setGeoResults([]);
     try {
-      const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to find location');
-      const results = Array.isArray(data.results) ? data.results as GeoResult[] : [];
+      const results = await geocodeLocation(q);
       setGeoResults(results);
       if (results.length === 0) setGeoError('No locations found. Try a more specific name.');
     } catch (err) {
@@ -129,22 +153,10 @@ export default function App() {
         gochar: form.gochar.trim() || undefined,
       };
 
-      const res = await fetch('/api/generate-kundli', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const assets = await getKundliAssets();
+      const pdf = await generateKundliPdf(payload, assets);
 
-      if (!res.ok) {
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const data = await res.json();
-          throw new Error(data.error || 'Failed to generate PDF');
-        }
-        throw new Error(await res.text() || 'Failed to generate PDF');
-      }
-
-      const blob = await res.blob();
+      const blob = new Blob([new Uint8Array(pdf)], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const filename = sanitizeFilename(payload.name);
@@ -168,7 +180,7 @@ export default function App() {
         <header className="header">
           <p className="eyebrow">Astrochitra</p>
           <h1>Kundli PDF Generator</h1>
-          <p className="lede">Enter birth details, generate the Janma Lagna Kundli, and download the PDF.</p>
+          <p className="lede">Enter birth details, generate the Janma Lagna Kundli, and download the PDF — entirely in your browser.</p>
         </header>
 
         <main className="panel">
@@ -250,7 +262,7 @@ export default function App() {
               <button type="submit" disabled={!canSubmit || loading}>
                 {loading ? 'Generating PDF…' : 'Generate & Download PDF'}
               </button>
-              <p className="hint">Search a location by name, or enter coordinates manually.</p>
+              <p className="hint">Everything runs in your browser — no backend required.</p>
             </div>
 
             {error && <div className="status status-error" role="alert">{error}</div>}

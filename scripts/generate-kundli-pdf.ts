@@ -8,13 +8,32 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_PLACES, defaultPdfFilename, generateKundliPdf } from '../src/generatePdf.js';
+import { DEFAULT_PLACES, defaultPdfFilename, generateKundliPdf, type KundliAssets } from '../src/generatePdf.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ASSETS = fs.existsSync(path.join(HERE, '..', 'public', 'assets', 'cell_mask.json'))
+  ? path.join(HERE, '..', 'public', 'assets')
+  : path.join(HERE, '..', 'assets');
 
 function arg(name: string, def?: string): string | undefined {
   const i = process.argv.indexOf('--' + name);
   return i > -1 ? process.argv[i + 1] : def;
+}
+
+function loadAssetsFromDisk(): KundliAssets {
+  const read = (p: string) => new Uint8Array(fs.readFileSync(path.join(ASSETS, p)));
+  const readText = (p: string) => fs.readFileSync(path.join(ASSETS, p), 'utf8');
+  return {
+    backgroundJpg: read('background.jpg'),
+    frameNatalPng: read('frame_natal.png'),
+    frameGocharPng: read('frame_gochar.png'),
+    logoPng: read('logo.png'),
+    logoPlaceJson: readText('logo_place.json'),
+    cellMaskJson: readText('cell_mask.json'),
+    balooFont: read('fonts/Baloo2-ExtraBold.ttf'),
+    poppinsFont: read('fonts/Poppins-Regular.ttf'),
+    notoFont: read('fonts/NotoSans-Regular.ttf'),
+  };
 }
 
 async function main() {
@@ -26,11 +45,11 @@ async function main() {
   const lat = parseFloat(arg('lat', String(pre[0]))!);
   const lon = parseFloat(arg('lon', String(pre[1]))!);
   const tz = parseFloat(arg('tz', String(pre[2]))!);
-  const tzname = arg('tzname', 'Asia/Kolkata')!;
   const gochar = arg('gochar');
   const out = arg('out', path.join(HERE, '..', 'output', defaultPdfFilename(name)))!;
 
-  const pdf = await generateKundliPdf({ name, date, time, place, latitude: lat, longitude: lon, timezone: tz, tzname, gochar });
+  const assets = loadAssetsFromDisk();
+  const pdf = await generateKundliPdf({ name, date, time, place, latitude: lat, longitude: lon, timezone: tz, gochar }, assets);
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, pdf);
   console.log('wrote', out);

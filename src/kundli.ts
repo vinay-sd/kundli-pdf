@@ -261,11 +261,13 @@ function dignityLabel(dignity: string | number): string {
   return dignity || 'neutral';
 }
 
-function formatShortDate(date: Date | string): string {
+function formatShortDate(date: Date | string, tzHours = 0): string {
   if (!date) return '';
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
-  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+  // Format in the requested timezone offset deterministically across Node/browser.
+  const shifted = new Date(d.getTime() + tzHours * 3600000);
+  return `${String(shifted.getUTCDate()).padStart(2, '0')}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-${shifted.getUTCFullYear()}`;
 }
 
 function mapPlanets(planets: Record<string, RawPosition>, asc: RawPosition | null): Record<string, PlanetInfo> {
@@ -327,7 +329,7 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
-function computeDasha(dasha: any): DashaData {
+function computeDasha(dasha: any, tzHours = 0): DashaData {
   const now = new Date();
   let mahaDasas: DashaPeriod[] = [];
   let antarDasas: DashaPeriod[] = [];
@@ -346,8 +348,8 @@ function computeDasha(dasha: any): DashaData {
     lord: d.planet,
     start: d.startTime,
     end: d.endTime,
-    startStr: formatShortDate(d.startTime),
-    endStr: formatShortDate(d.endTime),
+    startStr: formatShortDate(d.startTime, tzHours),
+    endStr: formatShortDate(d.endTime, tzHours),
   }));
 
   const currentMahaRaw = dasha.fullCycle.find((d: any) => now >= new Date(d.startTime) && now < new Date(d.endTime));
@@ -357,8 +359,8 @@ function computeDasha(dasha: any): DashaData {
     lord: currentMahaRaw.planet,
     start: currentMahaRaw.startTime,
     end: currentMahaRaw.endTime,
-    startStr: formatShortDate(currentMahaRaw.startTime),
-    endStr: formatShortDate(currentMahaRaw.endTime),
+    startStr: formatShortDate(currentMahaRaw.startTime, tzHours),
+    endStr: formatShortDate(currentMahaRaw.endTime, tzHours),
   };
 
   const mahaLordIdx = DASHA_LORDS.indexOf(currentMahaRaw.planet);
@@ -376,8 +378,8 @@ function computeDasha(dasha: any): DashaData {
       lord: adLord,
       start: antarStart.toISOString(),
       end: adEnd.toISOString(),
-      startStr: formatShortDate(antarStart),
-      endStr: formatShortDate(adEnd),
+      startStr: formatShortDate(antarStart, tzHours),
+      endStr: formatShortDate(adEnd, tzHours),
     });
     antarStart = adEnd;
   }
@@ -633,7 +635,7 @@ export function generateKundli(bd: BirthDetails): KundliData {
   const planets = Object.entries(mapped).map(([, v]) => v);
 
   const houses = buildHouses(planets, ascendantSign);
-  const dasha = computeDasha(r.dasha);
+  const dasha = computeDasha(r.dasha, tz);
   const navamsa = buildNavamsa(r);
 
   const ascSymbol = mapped.Ascendant;
