@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "kundli-pdf": "tsx scripts/generate-kundli-pdf.ts"
+    "kundli-pdf": "tsx scripts/generate-kundli-pdf.ts",
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@ishubhamx/panchangam-js": "^3.0.0",

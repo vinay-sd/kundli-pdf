@@ -24,7 +24,6 @@ function loadAssetsFromDisk(): KundliAssets {
   const read = (p: string) => new Uint8Array(fs.readFileSync(path.join(ASSETS, p)));
   const readText = (p: string) => fs.readFileSync(path.join(ASSETS, p), 'utf8');
   return {
-    backgroundJpg: read('background.jpg'),
     frameNatalPng: read('frame_natal.png'),
     frameGocharPng: read('frame_gochar.png'),
     logoPng: read('logo.png'),

@@ -7,20 +7,21 @@ const PAGE_W = 1190.25, PAGE_H = 842.25;
 const Y = (top: number) => PAGE_H - top; // top-based pt → pdf y
 const MAROON = rgb(0.353, 0, 0.016);
 const BLACK = rgb(0, 0, 0);
+const PLANET_INK = rgb(0x37 / 255, 0x2e / 255, 0x1f / 255); // #372e1f
 
-const PLANET: Record<string, { ab: string; color: RGB }> = {
-  Sun: { ab: 'Su', color: rgb(0.796, 0.412, 0.172) },
-  Moon: { ab: 'Mo', color: rgb(0.306, 0.498, 0.674) },
-  Mars: { ab: 'Ma', color: rgb(0.624, 0.133, 0.157) },
-  Mercury: { ab: 'Me', color: rgb(0.176, 0.514, 0.314) },
-  Jupiter: { ab: 'Ju', color: rgb(0.867, 0.694, 0.333) },
-  Venus: { ab: 'Ve', color: rgb(0.726, 0.126, 0.486) },
-  Saturn: { ab: 'Sa', color: rgb(0.267, 0.4, 0.824) },
-  Rahu: { ab: 'Ra', color: rgb(0.184, 0.294, 0.228) },
-  Ketu: { ab: 'Ke', color: rgb(0.482, 0.255, 0.118) },
-  Uranus: { ab: 'Ur', color: rgb(0, 0, 0) },
-  Neptune: { ab: 'Ne', color: rgb(0.216, 0.18, 0.122) },
-  Pluto: { ab: 'Pl', color: rgb(0.184, 0.145, 0.114) },
+const PLANET: Record<string, string> = {
+  Sun: 'Su',
+  Moon: 'Mo',
+  Mars: 'Ma',
+  Mercury: 'Me',
+  Jupiter: 'Ju',
+  Venus: 'Ve',
+  Saturn: 'Sa',
+  Rahu: 'Ra',
+  Ketu: 'Ke',
+  Uranus: 'Ur',
+  Neptune: 'Ne',
+  Pluto: 'Pl',
 };
 const NATAL_ORDER = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Rahu', 'Ketu', 'Uranus', 'Neptune', 'Pluto'];
 const GOCHAR_ORDER = NATAL_ORDER.slice(0, 9);
@@ -48,7 +49,6 @@ export const DEFAULT_PLACES: Record<string, [number, number, number]> = {
 };
 
 export interface KundliAssets {
-  backgroundJpg: Uint8Array;
   frameNatalPng: Uint8Array;
   frameGocharPng: Uint8Array;
   logoPng: Uint8Array;
@@ -60,7 +60,6 @@ export interface KundliAssets {
 }
 
 const ASSET_FILES = {
-  backgroundJpg: 'background.jpg',
   frameNatalPng: 'frame_natal.png',
   frameGocharPng: 'frame_gochar.png',
   logoPng: 'logo.png',
@@ -87,8 +86,7 @@ async function fetchText(url: string): Promise<string> {
 
 export async function loadKundliAssets(baseUrl = '/assets'): Promise<KundliAssets> {
   const base = baseUrl.replace(/\/$/, '');
-  const [backgroundJpg, frameNatalPng, frameGocharPng, logoPng, logoPlaceJson, cellMaskJson, balooFont, poppinsFont, notoFont] = await Promise.all([
-    fetchBytes(`${base}/${ASSET_FILES.backgroundJpg}`),
+  const [frameNatalPng, frameGocharPng, logoPng, logoPlaceJson, cellMaskJson, balooFont, poppinsFont, notoFont] = await Promise.all([
     fetchBytes(`${base}/${ASSET_FILES.frameNatalPng}`),
     fetchBytes(`${base}/${ASSET_FILES.frameGocharPng}`),
     fetchBytes(`${base}/${ASSET_FILES.logoPng}`),
@@ -98,7 +96,7 @@ export async function loadKundliAssets(baseUrl = '/assets'): Promise<KundliAsset
     fetchBytes(`${base}/${ASSET_FILES.poppinsFont}`),
     fetchBytes(`${base}/${ASSET_FILES.notoFont}`),
   ]);
-  return { backgroundJpg, frameNatalPng, frameGocharPng, logoPng, logoPlaceJson, cellMaskJson, balooFont, poppinsFont, notoFont };
+  return { frameNatalPng, frameGocharPng, logoPng, logoPlaceJson, cellMaskJson, balooFont, poppinsFont, notoFont };
 }
 
 export async function getKundliAssets(baseUrl = '/assets'): Promise<KundliAssets> {
@@ -209,9 +207,9 @@ function drawChart(M: MaskData, page: PDFPage, f: Fonts, which: 'natal' | 'gocha
     const mine = bodies.filter(b => slotOfSign(b.sign) === slot);
 
     const build = (s: number): Item[] => mine.map(b => {
-      const P = PLANET[b.name] ?? { ab: b.name.slice(0, 2), color: BLACK };
+      const ab = PLANET[b.name] ?? b.name.slice(0, 2);
       const size = (which === 'natal' ? 15 : 20) * s;
-      const rW = b.retro ? textW(f.noto, 'ᴿ', size) : 0, nW = textW(f.baloo, P.ab, size);
+      const rW = b.retro ? textW(f.noto, 'ᴿ', size) : 0, nW = textW(f.baloo, ab, size);
       const degStr = b.deg != null ? `${b.deg.toFixed(2)}°` : '';
       const w = Math.max(nW + rW, degStr ? textW(f.baloo, degStr, size) : 0) + 2;
       const h = which === 'natal' ? 25 * s + 9 * s : 14.5 * s + 2;
@@ -219,9 +217,9 @@ function drawChart(M: MaskData, page: PDFPage, f: Fonts, which: 'natal' | 'gocha
         w, h, draw: (pg, cx, top) => {
           const base = top + size * 0.74; // cap-height → baseline
           const x0 = cx - (nW + rW) / 2;
-          text(pg, P.ab, f.baloo, size, x0, base, P.color);
-          if (b.retro) text(pg, 'ᴿ', f.noto, size, x0 + nW, base, P.color);
-          if (degStr) centered(pg, degStr, f.baloo, size, cx, base + 21 * s, P.color);
+          text(pg, ab, f.baloo, size, x0, base, PLANET_INK);
+          if (b.retro) text(pg, 'ᴿ', f.noto, size, x0 + nW, base, PLANET_INK);
+          if (degStr) centered(pg, degStr, f.baloo, size, cx, base + 21 * s, PLANET_INK);
         },
       };
     });
@@ -279,8 +277,7 @@ export async function generateKundliPdf(input: GenerateKundliPdfInput, assets?: 
   };
   const page = doc.addPage([PAGE_W, PAGE_H]);
 
-  // background + logo
-  page.drawImage(await doc.embedJpg(a.backgroundJpg), { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+  // logo
   const lp = JSON.parse(a.logoPlaceJson);
   page.drawImage(await doc.embedPng(a.logoPng), { x: lp.x, y: Y(lp.top + lp.h), width: lp.w, height: lp.h });
 

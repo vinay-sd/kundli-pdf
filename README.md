@@ -10,7 +10,6 @@ Options: `--lat --lon --tz` (default Mumbai, 5.5) · `--gochar "YYYY-MM-DD HH:MM
 In your repo, delete `src/` and change the single `import ... from '../src/kundli'` line at the top of the script.
 
 ## assets/
-- background.jpg – paper texture (extracted from the sample)
 - frame_natal.png / frame_gochar.png – chart frames, RGB + soft mask merged to RGBA
 - logo.png – Astrochitra logo, transparent, 800 dpi (rendered from the PDF's vector shading)
 - cell_mask.json – the 12 house cells of the frame as a mask; planets are packed inside it
